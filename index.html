@@ -95,6 +95,7 @@
     font-size:11px; padding:3px 8px; border-radius:20px; flex-shrink:0;
   }
   .pill.playing{ background: var(--live-dim); color: var(--live); }
+  .speed{ font-size:11px; color:var(--muted); border:1px solid var(--border); border-radius:20px; padding:2px 7px; flex-shrink:0; }
   .pill.paused{ background: var(--pause-dim); color: var(--pause); }
   .pill.ended{ background: rgba(125,133,144,0.16); color: var(--muted); }
   .card.ended .value.accent{ color: var(--muted); }
@@ -198,7 +199,7 @@
     </div>
   </div>
 
-  <footer><span class="version">v1.0</span><br>Entwickelt für JungleCraft Livestreams<br>erstellt von Junglecraft Social-Media-Team</footer>
+  <footer><span class="version">v1.1</span><br>Entwickelt für JungleCraft Livestreams<br>erstellt von Junglecraft Social-Media-Team</footer>
 </div>
 
 <script>
@@ -212,6 +213,7 @@
   let selectedSource = '';
   let seeking = false;      // true, solange der Spulregler gezogen wird
   let statuses = {};
+  let speeds = {};          // eingestellte Geschwindigkeit je Quelle (1 = normal), falls OBS sie nennt
   const LINGER_MS = 5000;   // so lange bleibt eine beendete Karte sichtbar
   const FADE_MS = 1000;     // Ausblenden in der letzten Sekunde
   let lastActive = {};      // Quellen, die zuletzt läuft/pausiert waren
@@ -346,6 +348,19 @@
     }
   }
 
+  let kinds = {};
+  async function refreshSpeeds(names){
+    await Promise.all(names.map(async name => {
+      if(kinds[name] !== 'ffmpeg_source') return;
+      try{
+        const r = await req('GetInputSettings', {inputName: name});
+        const pct = r.inputSettings && r.inputSettings.speed_percent;
+        speeds[name] = (typeof pct === 'number' && pct > 0) ? pct / 100 : 1;
+      }catch(e){ /* dann Messwert verwenden */ }
+    }));
+    Object.keys(speeds).forEach(k => { if(!names.includes(k)) delete speeds[k]; });
+  }
+
   async function refreshSceneItems(){
     try{
       const cur = await req('GetCurrentProgramScene');
@@ -355,7 +370,10 @@
         .filter(it => it.sceneItemEnabled && (it.inputKind === 'ffmpeg_source' || it.inputKind === 'vlc_source'))
         .map(it => it.sourceName);
       mediaSourceNames = names;
+      kinds = {};
+      list.sceneItems.forEach(it => { kinds[it.sourceName] = it.inputKind; });
       syncSelection(names);
+      await refreshSpeeds(names);
       Object.keys(statuses).forEach(key => { if(!names.includes(key)) delete statuses[key]; });
       await pollMedia();
     }catch(e){ /* Szene evtl. gerade im Wechsel */ }
@@ -365,12 +383,35 @@
     await Promise.all(mediaSourceNames.map(async name => {
       try{
         const st = await req('GetMediaInputStatus', {inputName: name});
-        statuses[name] = {
+        const prev = statuses[name];
+        const now = performance.now();
+        const cur = {
           state: st.mediaState,
           duration: st.mediaDuration,
           cursor: st.mediaCursor,
-          ts: performance.now()
+          ts: now,
+          rate: prev && prev.rate ? prev.rate : 1,
+          shown: prev ? prev.shown : undefined,
+          remShown: prev ? prev.remShown : undefined
         };
+        // Tatsächliche Abspielrate über ein Fenster von ~6 s messen (Fallback für Quellen ohne Geschwindigkeitsangabe, z. B. VLC)
+        if(cur.state === 'OBS_MEDIA_STATE_PLAYING'){
+          let hist = (prev && prev.hist) ? prev.hist : [];
+          const last = hist[hist.length - 1];
+          if(last && (cur.cursor < last.cursor || cur.cursor - last.cursor > (now - last.ts) * 4 + 500)) hist = [];  // Sprung/Neustart
+          hist.push({ts: now, cursor: cur.cursor});
+          while(hist.length > 2 && now - hist[0].ts > 6000) hist.shift();
+          const span = now - hist[0].ts;
+          if(span >= 1800){
+            const measured = (cur.cursor - hist[0].cursor) / span;
+            cur.rate = Math.round(Math.min(4, Math.max(0.1, measured)) * 100) / 100;
+          }
+          cur.hist = hist;
+        }
+        if(cur.state !== 'OBS_MEDIA_STATE_PLAYING'){ cur.shown = undefined; cur.remShown = undefined; cur.hist = undefined; }
+        statuses[name] = cur;
+        // Neue Quelle/Neustart nicht mit alter Position vermischen
+        if(prev && Math.abs(cur.cursor - prev.cursor) > 2500 + (now - prev.ts) * 4){ cur.shown = undefined; cur.remShown = undefined; }
       }catch(e){ delete statuses[name]; }
     }));
     render();
@@ -379,6 +420,29 @@
   function syncSelection(names){
     if(selectedSource && !names.includes(selectedSource)) selectedSource = '';
     updateControlsState();
+  }
+
+  // Geschätzte Position: nutzt die Wiedergabegeschwindigkeit und läuft nie rückwärts (kein Zucken)
+  function effectiveRate(name, s){
+    if(speeds[name]) return speeds[name];
+    return s.rate || 1;
+  }
+  function estimateCursor(name, s){
+    if(s.state !== 'OBS_MEDIA_STATE_PLAYING') return s.cursor;
+    const rate = effectiveRate(name, s);
+    let est = Math.min(s.duration, s.cursor + (performance.now() - s.ts) * rate);
+    if(s.shown !== undefined && est < s.shown && s.shown - est < 1500) est = s.shown;
+    s.shown = est;
+    return est;
+  }
+
+  function remainingSeconds(s, cursor, rate){
+    let rem = Math.max(0, (s.duration - cursor) / rate);
+    if(s.state === 'OBS_MEDIA_STATE_PLAYING'){
+      if(s.remShown !== undefined && rem > s.remShown && rem - s.remShown < Math.max(1500, rem * 0.04)) rem = s.remShown;
+      s.remShown = rem;
+    }
+    return rem;
   }
 
   function updateControlsState(){
@@ -395,8 +459,7 @@
     const playing = st.state === 'OBS_MEDIA_STATE_PLAYING';
     if(!playing && st.state !== 'OBS_MEDIA_STATE_PAUSED') return null;
     if(!(st.duration > 0)) return null;
-    let cursor = st.cursor;
-    if(playing) cursor = Math.min(st.duration, st.cursor + (performance.now() - st.ts));
+    const cursor = estimateCursor(selectedSource, st);
     return {name: selectedSource, duration: st.duration, cursor: cursor};
   }
 
@@ -430,7 +493,7 @@
     try{
       await req('SetMediaInputCursor', {inputName: info.name, mediaCursor: target});
       const st = statuses[info.name];
-      if(st){ st.cursor = target; st.ts = performance.now(); }
+      if(st){ st.cursor = target; st.ts = performance.now(); st.shown = undefined; st.remShown = undefined; st.hist = undefined; }
     }catch(e){ /* Quelle evtl. nicht mehr vorhanden */ }
     render();
   }
@@ -454,7 +517,7 @@
   }
   function stopLoops(){
     clearInterval(sceneTimer); clearInterval(pollTimer); clearInterval(tickTimer);
-    statuses = {}; mediaSourceNames = []; selectedSource = ''; lastActive = {}; lingering = {};
+    statuses = {}; speeds = {}; mediaSourceNames = []; selectedSource = ''; lastActive = {}; lingering = {};
     updateControlsState();
     render();
   }
@@ -525,8 +588,12 @@
       const playing = !ended && s.state === 'OBS_MEDIA_STATE_PLAYING';
       let duration = ended ? lingering[name].duration : s.duration;
       let cursor = ended ? duration : s.cursor;
-      if(playing) cursor = Math.min(duration, s.cursor + (now - s.ts));
-      const remaining = Math.max(0, duration - cursor);
+      let rate = 1;
+      if(!ended){ rate = effectiveRate(name, s); if(playing) cursor = estimateCursor(name, s); }
+      // verbleibende echte Zeit = Restlänge / Geschwindigkeit
+      const remaining = ended ? 0 : remainingSeconds(s, cursor, rate);
+      const speedTag = (!ended && Math.abs(rate - 1) > 0.03)
+        ? '<span class="speed">' + (Math.round(rate * 100) / 100).toString().replace('.', ',') + '×</span>' : '';
       const pct = duration > 0 ? Math.min(100, (cursor / duration) * 100) : 0;
       let style = '';
       if(ended){
@@ -538,7 +605,7 @@
       return (
         '<div class="card' + (ended ? ' ended' : '') + (name === selectedSource ? ' selected' : '') + '" data-name="' + escapeHtml(name) + '"' + style + '>' +
           '<div class="card-head">' +
-            '<span class="name">' + escapeHtml(name) + '</span>' +
+            '<span class="name">' + escapeHtml(name) + '</span>' + speedTag +
             '<span class="pill ' + pillClass + '">' +
               '<span class="pdot"></span>' + pillText +
             '</span>' +
