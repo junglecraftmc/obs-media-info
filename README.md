@@ -2,11 +2,11 @@
 
 A free custom browser dock for OBS Studio that automatically detects which video (media source) is playing in the active scene and shows the **elapsed time, remaining time and a progress bar** live. Click a source to select it, then pause, resume, seek or skip ±10 seconds right from the dock.
 
-**Quick start:** In OBS go to **Docks → Custom Browser Docks**, add a name and paste this URL: `https://vidiverse.github.io/obs-media-info/`. No download needed.
+**Quick start:** In OBS go to **Docks → Custom Browser Docks**, add a name and paste this URL: `https://junglecraftmc.github.io/obs-media-info/`. No download needed.
 
 **Requirements:** OBS Studio 28 or newer with the obs-websocket server enabled (**Tools → obs-websocket Settings**). Click the gear icon in the dock to enter host (default `localhost`), port (default `4455`) and password if set.
 
-**Features:** automatic media source detection in the active scene, live countdown, finished videos stay visible for 5 seconds before fading out, pause/resume, a seek bar and −10 s / +10 s skip buttons for the selected source, auto-reconnect, remembered connection settings (optional), collapsible settings panel, single HTML file without dependencies.
+**Features:** automatic media source detection in the active scene, live countdown, finished videos stay visible for 5 seconds before fading out, pause/resume, a seek bar and −10 s / +10 s skip buttons for the selected source, correct remaining time at reduced or increased playback speed (shows e.g. 0,5×), auto-reconnect, remembered connection settings (optional), collapsible settings panel, single HTML file without dependencies.
 
 **Limitations:** media sources inside nested scenes or groups are not detected. Supported types: media source (`ffmpeg_source`) and VLC video source (`vlc_source`).
 
@@ -22,7 +22,7 @@ Keywords: OBS Studio, media source timer, video countdown, remaining time, brows
 
 Ein Custom Browser Dock für OBS Studio, das automatisch erkennt, welches Video (Medienquelle) gerade in der aktiven Szene läuft, und die verstrichene sowie verbleibende Zeit live anzeigt.
 
-**Version:** v1.0
+**Version:** v1.1
 **Entwickelt für:** JungleCraft Livestreams
 **Erstellt von:** Junglecraft Social-Media-Team
 
@@ -32,6 +32,7 @@ Ein Custom Browser Dock für OBS Studio, das automatisch erkennt, welches Video 
 - Zeigt pro Quelle Status (Läuft/Pause), verstrichene Zeit, verbleibende Zeit und einen Fortschrittsbalken
 - Reagiert live auf Szenenwechsel, Sichtbarkeits-Änderungen und Start/Stopp des Videos
 - Quelle per Klick auf die jeweilige Karte auswählbar, darunter kleine Pause-/Weiter-Steuerung für die gewählte Quelle
+- Bei geänderter Wiedergabegeschwindigkeit (z. B. 50 %) rechnet das Dock die verbleibende Zeit korrekt um und zeigt das Tempo an (z. B. 0,5×)
 - Spulleiste zum Vor- und Zurückspulen sowie Buttons für −10 s und +10 s bei der gewählten Quelle
 - Verbindet sich automatisch neu, falls OBS neu startet oder die Verbindung abbricht
 - Verbindungseinstellungen (Host/Port/Passwort) sind über ein Zahnrad-Symbol ein- und ausblendbar
@@ -48,7 +49,7 @@ Keine Datei herunterladen nötig – einfach die gehostete URL direkt in OBS ein
 1. In OBS: **Docks → Benutzerdefinierte Browser-Docks**
 2. Namen vergeben und als URL eintragen:
    ```
-   https://vidiverse.github.io/obs-media-info/
+   https://junglecraftmc.github.io/obs-media-info/
    ```
 3. Erstellen klicken – das Dock erscheint
 
@@ -71,6 +72,7 @@ MIT, siehe [LICENSE](LICENSE). Dieses Projekt steht in keiner Verbindung zum OBS
 
 ## Versionshistorie
 
+- **v1.1** – Wiedergabegeschwindigkeit wird berücksichtigt: Anzeige zuckt bei reduziertem Tempo nicht mehr, verbleibende Zeit stimmt, Tempo-Anzeige auf der Karte
 - **v1.0** – Spulleiste (Vor-/Zurückspulen per Schieberegler) sowie Buttons für −10 s und +10 s
 - **v0.9** – Beendete Videos bleiben noch 5 Sekunden als Karte (Status „Beendet") sichtbar und blenden dann aus
 - **v0.8** – Die ganze Karte ist zuverlässig klickbar (Auswahl reagiert sofort beim Drücken, auch während das Video läuft)
