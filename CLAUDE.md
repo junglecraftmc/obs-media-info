@@ -8,7 +8,7 @@ OBS Video-Timer-Dock: ein Custom Browser Dock für OBS Studio, das über obs-web
 
 - Entwickelt für JungleCraft Livestreams
 - Erstellt vom Junglecraft Social-Media-Team
-- Live-URL (GitHub Pages): https://vidiverse.github.io/obs-media-info/
+- Live-URL (GitHub Pages): https://junglecraftmc.github.io/obs-media-info/
 
 ## Dateistruktur
 
@@ -40,9 +40,9 @@ OBS Video-Timer-Dock: ein Custom Browser Dock für OBS Studio, das über obs-web
 ## Technische Eckpunkte
 
 - Protokoll: obs-websocket v5 über rohes `WebSocket`, Authentifizierung per SHA-256 (`crypto.subtle`), Event-Subscriptions `2047`.
-- Genutzte Requests: `GetCurrentProgramScene`, `GetSceneItemList`, `GetMediaInputStatus`, `TriggerMediaInputAction`, `SetMediaInputCursor` (Spulen, Millisekunden).
+- Genutzte Requests: `GetCurrentProgramScene`, `GetSceneItemList`, `GetMediaInputStatus`, `GetInputSettings` (`speed_percent` bei `ffmpeg_source`), `TriggerMediaInputAction`, `SetMediaInputCursor` (Spulen, Millisekunden).
 - Genutzte Events: `CurrentProgramSceneChanged`, `SceneItemEnableStateChanged`, `SceneItemCreated`, `SceneItemRemoved`, `MediaInputPlayback*`.
-- Zeitangaben von obs-websocket sind Millisekunden. Zwischen den Abfragen (1 Sekunde) wird die Anzeige lokal interpoliert.
+- Zeitangaben von obs-websocket sind Millisekunden. Zwischen den Abfragen (1 Sekunde) wird die Anzeige lokal interpoliert, und zwar mit der Wiedergabegeschwindigkeit: bei `ffmpeg_source` aus `speed_percent`, sonst aus einem Messfenster von ca. 6 s. Die Anzeige läuft nie rückwärts, die Restzeit ist Restlänge geteilt durch Tempo.
 - Verbindung baut sich bei Abbruch alle 3 Sekunden automatisch neu auf. Bei Close-Code 4009 (Authentifizierung fehlgeschlagen) kein Reconnect, stattdessen werden die Einstellungen geöffnet.
 
 ## Bekannte Einschränkungen
